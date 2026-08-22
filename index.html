@@ -400,17 +400,33 @@
             try {
                 const res = await fetch(`${APPS_SCRIPT_URL}?t=${Date.now()}`);
                 if (res.ok) {
-                    stateData = await res.json();
-                    syncStatusEl.textContent = `Synced: ${new Date().toLocaleTimeString()}`;
-                    syncStatusEl.style.borderColor = 'rgba(46, 194, 126, 0.4)';
-                    syncStatusEl.style.color = '#2ec27e';
+                    const data = await res.json();
+                    if (data && typeof data.streak !== 'undefined') {
+                        stateData = data;
+                        syncStatusEl.textContent = `Synced: ${new Date().toLocaleTimeString()}`;
+                        syncStatusEl.style.borderColor = 'rgba(46, 194, 126, 0.4)';
+                        syncStatusEl.style.color = '#2ec27e';
+                    }
                 }
             } catch (err) {
-                syncStatusEl.textContent = 'Sync Offline (Retrying...)';
+                syncStatusEl.textContent = 'Sync Retry in 30s';
                 syncStatusEl.style.borderColor = 'rgba(224, 27, 36, 0.4)';
                 syncStatusEl.style.color = '#e01b24';
             }
         }
+        
+        // Fetch immediately on load
+        fetchState();
+        
+        // Poll every 30 seconds
+        setInterval(fetchState, 30000);
+        
+        // Auto-sync immediately whenever you open the tab/phone screen
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                fetchState();
+            }
+        });
 
         function renderLoop() {
             drawHourglass();
