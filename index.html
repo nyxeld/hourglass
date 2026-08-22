@@ -386,11 +386,11 @@
                 headerEl.textContent = 'THE SANDS BURN ANEW';
                 timerLabelEl.textContent = 'Study session ready to begin.';
             } else if (state === TimerState.STUDY) {
-                headerEl.textContent = 'THE HOURGLASS DEMANDS YOUR FOCUS' + (isPaused ? ' BACK TO KEEP FLOWING' : '');
+                headerEl.textContent = 'THE HOURGLASS DEMANDS YOUR FOCUS' + (isPaused ? ' BACK' : '');
                 timerLabelEl.textContent = isPaused ? `PAUSED • ${timeStr}` : timeStr;
             } else if (state === TimerState.STUDY_OVERTIME) {
                 headerEl.textContent = 'THE SANDS HAVE SETTLED';
-                timerLabelEl.textContent = 'Battle won! Ready to claim reward.';
+                timerLabelEl.textContent = 'Ready to claim reward.';
             }
         }
 
