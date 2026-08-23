@@ -107,339 +107,341 @@
     </main>
 
     <script>
-        const TimerState = {
-            IDLE: 'IDLE',
-            STUDY: 'STUDY',
-            STUDY_OVERTIME: 'STUDY_OVERTIME',
-            SHORT_BREAK: 'SHORT_BREAK',
-            LONG_BREAK: 'LONG_BREAK',
-            BREAK_PRIMED: 'BREAK_PRIMED',
-            BREAK_FINISHED: 'BREAK_FINISHED',
+    const TimerState = {
+        IDLE: 'IDLE',
+        STUDY: 'STUDY',
+        STUDY_OVERTIME: 'STUDY_OVERTIME',
+        SHORT_BREAK: 'SHORT_BREAK',
+        LONG_BREAK: 'LONG_BREAK',
+        BREAK_PRIMED: 'BREAK_PRIMED',
+        BREAK_FINISHED: 'BREAK_FINISHED',
+    };
+
+    let stateData = {
+        streak: 0,
+        isPledged: false,
+        state: TimerState.IDLE,
+        isPaused: false,
+        sessionStartedAt: 0,
+        totalDuration: 1500,
+        elapsed: 0,
+        date: ''
+    };
+
+    const canvas = document.getElementById('hourglass-canvas');
+    const ctx = canvas.getContext('2d');
+    const headerEl = document.getElementById('header');
+    const valueLabelEl = document.getElementById('value-label');
+    const timerLabelEl = document.getElementById('timer-label');
+    const syncStatusEl = document.getElementById('sync-status');
+
+    function calculateBankedAllegiance(streak) {
+        if (streak <= 0) return 0;
+        if (streak === 1) return 1200;
+        if (streak === 2) return 3200;
+        if (streak === 3) return 6000;
+        if (streak === 4) return 10500;
+        return 10500 + ((streak - 4) * 3500);
+    }
+
+    function formatRemainingTime(seconds) {
+        if (seconds <= 0) return '0s remaining';
+        if (seconds <= 60) return `${Math.round(seconds)}s remaining`;
+        const mins = Math.ceil(seconds / 60);
+        return `${mins}m remaining`;
+    }
+
+    function getElapsedSeconds() {
+        if (stateData.isPaused) {
+            return Number(stateData.elapsed) || 0;
+        }
+        if (!stateData.sessionStartedAt) return 0;
+        const nowSec = Math.floor(Date.now() / 1000);
+        return Math.max(0, nowSec - stateData.sessionStartedAt);
+    }
+
+    function getProgress() {
+        if (stateData.state === TimerState.IDLE) return 0.0;
+        if (stateData.state === TimerState.STUDY_OVERTIME || stateData.state === TimerState.BREAK_FINISHED) return 1.0;
+        
+        const total = stateData.totalDuration || 1500;
+        const elapsed = getElapsedSeconds();
+        return Math.min(1.0, elapsed / total);
+    }
+
+    function getRemainingSeconds() {
+        if (stateData.state === TimerState.STUDY_OVERTIME || stateData.state === TimerState.BREAK_FINISHED) return 0;
+        const total = stateData.totalDuration || 1500;
+        const elapsed = getElapsedSeconds();
+        return Math.max(0, total - elapsed);
+    }
+
+    function getFlameColor(isBreathing) {
+        if (!isBreathing) return { r: 224, g: 27, b: 36 };
+        const t = performance.now() / 1000;
+        const factor = 0.5 + 0.5 * Math.sin(t * (2 * Math.PI / 2.0));
+        return {
+            r: Math.round(195 + 60 * factor),
+            g: Math.round(20 + 45 * factor),
+            b: Math.round(25 + 10 * factor),
         };
+    }
 
-        let stateData = {
-            streak: 0,
-            isPledged: false,
-            state: TimerState.IDLE,
-            isPaused: false,
-            sessionStartedAt: null,
-            durationSeconds: 1500,
-            date: ''
-        };
+    function drawHourglass() {
+        const wArea = canvas.width;
+        const hArea = canvas.height;
+        ctx.clearRect(0, 0, wArea, hArea);
 
-        const canvas = document.getElementById('hourglass-canvas');
-        const ctx = canvas.getContext('2d');
-        const headerEl = document.getElementById('header');
-        const valueLabelEl = document.getElementById('value-label');
-        const timerLabelEl = document.getElementById('timer-label');
-        const syncStatusEl = document.getElementById('sync-status');
+        const isPledged = stateData.isPledged;
+        const state = stateData.state;
+        const isRunning = state !== TimerState.IDLE;
+        const isBreak = state === TimerState.SHORT_BREAK || state === TimerState.LONG_BREAK || state === TimerState.BREAK_PRIMED;
+        const isPaused = stateData.isPaused || state === TimerState.BREAK_FINISHED || state === TimerState.STUDY_OVERTIME;
+        const progress = getProgress();
+        const flame = getFlameColor(isRunning && !isPaused);
+        const flameRgb = `rgb(${flame.r}, ${flame.g}, ${flame.b})`;
 
-        function calculateBankedAllegiance(streak) {
-            if (streak <= 0) return 0;
-            if (streak === 1) return 1200;
-            if (streak === 2) return 3200;
-            if (streak === 3) return 6000;
-            if (streak === 4) return 10500;
-            return 10500 + ((streak - 4) * 3500);
-        }
+        ctx.save();
+        ctx.translate(0.5 * wArea, 0.5 * hArea);
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
 
-        function formatRemainingTime(seconds) {
-            if (seconds <= 0) return '0s remaining';
-            if (seconds <= 60) return `${Math.round(seconds)}s remaining`;
-            const mins = Math.ceil(seconds / 60);
-            return `${mins}m remaining`;
-        }
+        const size = 200;
+        const scaleFactor = 1.0;
+        const radius = (0.5 * size - 2.0) * 0.75;
+        const h = radius * 0.94;
+        const w = radius * 0.66;
+        const waist = 4.0 * scaleFactor;
+        const lineWidth = 3.0 * scaleFactor;
+        const insetX = (lineWidth * 0.5) + (3.0 * scaleFactor);
+        const insetY = (lineWidth * 0.5) + (1.0 * scaleFactor);
 
-        function getProgress() {
-            if (stateData.state === TimerState.IDLE) return 0.0;
-            if (stateData.state === TimerState.STUDY_OVERTIME || stateData.state === TimerState.BREAK_FINISHED) return 1.0;
-            if (!stateData.sessionStartedAt || stateData.durationSeconds <= 0) return 0.0;
+        const hIn = Math.max(0, h - insetY);
+        const wIn = Math.max(0, w - insetX);
+        const waistIn = Math.max(1.0 * scaleFactor, waist - insetX);
 
-            const elapsed = Math.max(0, (Date.now() - stateData.sessionStartedAt) / 1000);
-            return Math.min(1.0, elapsed / stateData.durationSeconds);
-        }
-
-        function getRemainingSeconds() {
-            if (stateData.state === TimerState.STUDY_OVERTIME || stateData.state === TimerState.BREAK_FINISHED) return 0;
-            if (!stateData.sessionStartedAt) return stateData.durationSeconds;
-
-            const elapsed = Math.max(0, (Date.now() - stateData.sessionStartedAt) / 1000);
-            return Math.max(0, stateData.durationSeconds - elapsed);
-        }
-
-        function getFlameColor(isBreathing) {
-            if (!isBreathing) return { r: 224, g: 27, b: 36 };
-            const t = performance.now() / 1000;
-            const factor = 0.5 + 0.5 * Math.sin(t * (2 * Math.PI / 2.0));
-            return {
-                r: Math.round(195 + 60 * factor),
-                g: Math.round(20 + 45 * factor),
-                b: Math.round(25 + 10 * factor),
-            };
-        }
-
-        function drawHourglass() {
-            const wArea = canvas.width;
-            const hArea = canvas.height;
-            ctx.clearRect(0, 0, wArea, hArea);
-
-            const isPledged = stateData.isPledged;
-            const state = stateData.state;
-            const isRunning = state !== TimerState.IDLE;
-            const isBreak = state === TimerState.SHORT_BREAK || state === TimerState.LONG_BREAK || state === TimerState.BREAK_PRIMED;
-            const isPaused = stateData.isPaused || state === TimerState.BREAK_FINISHED || state === TimerState.STUDY_OVERTIME;
-            const progress = getProgress();
-            const flame = getFlameColor(isRunning && !isPaused);
-            const flameRgb = `rgb(${flame.r}, ${flame.g}, ${flame.b})`;
-
+        // Inner Sand Rendering
+        if (isPledged && hIn > 0 && wIn > 0) {
             ctx.save();
-            ctx.translate(0.5 * wArea, 0.5 * hArea);
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
-
-            const size = 200;
-            const scaleFactor = 1.0;
-            const radius = (0.5 * size - 2.0) * 0.75;
-            const h = radius * 0.94;
-            const w = radius * 0.66;
-            const waist = 4.0 * scaleFactor;
-            const lineWidth = 3.0 * scaleFactor;
-            const insetX = (lineWidth * 0.5) + (3.0 * scaleFactor);
-            const insetY = (lineWidth * 0.5) + (1.0 * scaleFactor);
-
-            const hIn = Math.max(0, h - insetY);
-            const wIn = Math.max(0, w - insetX);
-            const waistIn = Math.max(1.0 * scaleFactor, waist - insetX);
-
-            // Inner Sand Rendering
-            if (isPledged && hIn > 0 && wIn > 0) {
-                ctx.save();
-                ctx.beginPath();
-                ctx.moveTo(-wIn, -hIn);
-                ctx.lineTo(wIn, -hIn);
-                ctx.lineTo(waistIn, 0);
-                ctx.lineTo(wIn, hIn);
-                ctx.lineTo(-wIn, hIn);
-                ctx.lineTo(-waistIn, 0);
-                ctx.closePath();
-                ctx.clip();
-
-                ctx.fillStyle = flameRgb;
-                ctx.strokeStyle = flameRgb;
-
-                if (state === TimerState.IDLE) {
-                    ctx.fillRect(-wIn, 0, wIn * 2, hIn);
-                } else if (state === TimerState.BREAK_FINISHED) {
-                    ctx.fillRect(-wIn, -hIn, wIn * 2, hIn);
-                } else if (state === TimerState.STUDY_OVERTIME) {
-                    ctx.fillRect(-wIn, 0, wIn * 2, hIn);
-                } else if (!isBreak) {
-                    const topSandHeight = Math.sqrt(1.0 - progress) * hIn;
-                    if (topSandHeight > 0) {
-                        ctx.fillRect(-wIn, -topSandHeight, wIn * 2, topSandHeight);
-                    }
-
-                    const baseSandHeight = (1.0 - Math.sqrt(1.0 - progress)) * hIn;
-                    const yBed = hIn - baseSandHeight;
-                    let topOfSandCenter = yBed;
-
-                    if (progress < 0.25) {
-                        const u = progress / 0.25;
-                        const moundHeight = (1.0 - u) * Math.sqrt(u) * 0.4 * hIn;
-                        const moundWidth = wIn * (0.25 + 0.75 * u);
-                        topOfSandCenter = yBed - moundHeight;
-
-                        ctx.beginPath();
-                        ctx.moveTo(-wIn, hIn);
-                        ctx.lineTo(wIn, hIn);
-                        ctx.lineTo(wIn, yBed);
-                        ctx.lineTo(moundWidth, yBed);
-                        ctx.lineTo(0, topOfSandCenter);
-                        ctx.lineTo(-moundWidth, yBed);
-                        ctx.lineTo(-wIn, yBed);
-                        ctx.closePath();
-                        ctx.fill();
-                    } else if (baseSandHeight > 0) {
-                        ctx.fillRect(-wIn, yBed, wIn * 2, baseSandHeight);
-                    }
-
-                    if (!isPaused && progress < 1.0) {
-                        ctx.lineWidth = 2.0 * scaleFactor;
-                        ctx.beginPath();
-                        ctx.moveTo(0, 0);
-                        ctx.lineTo(0, Math.min(hIn, topOfSandCenter));
-                        ctx.stroke();
-                    }
-                } else {
-                    const topSandHeight = Math.sqrt(progress) * hIn;
-                    if (topSandHeight > 0) {
-                        ctx.fillRect(-wIn, -topSandHeight, wIn * 2, topSandHeight);
-                    }
-
-                    const baseSandHeight = (1.0 - Math.sqrt(progress)) * hIn;
-                    const yBed = hIn - baseSandHeight;
-                    let bottomStreamStartY = yBed;
-
-                    const rem = 1.0 - progress;
-                    if (rem < 0.25 && rem > 0) {
-                        const u = rem / 0.25;
-                        const moundHeight = (1.0 - u) * Math.sqrt(u) * 0.4 * hIn;
-                        const moundWidth = wIn * (0.25 + 0.75 * u);
-                        const topOfSandCenter = yBed - moundHeight;
-                        bottomStreamStartY = topOfSandCenter;
-
-                        ctx.beginPath();
-                        ctx.moveTo(-wIn, hIn);
-                        ctx.lineTo(wIn, hIn);
-                        ctx.lineTo(wIn, yBed);
-                        ctx.lineTo(moundWidth, yBed);
-                        ctx.lineTo(0, topOfSandCenter);
-                        ctx.lineTo(-moundWidth, yBed);
-                        ctx.lineTo(-wIn, yBed);
-                        ctx.closePath();
-                        ctx.fill();
-                    } else if (baseSandHeight > 0) {
-                        ctx.fillRect(-wIn, yBed, wIn * 2, baseSandHeight);
-                    }
-
-                    if (!isPaused && progress < 1.0 && baseSandHeight > 0) {
-                        ctx.lineWidth = 2.4 * scaleFactor;
-                        ctx.beginPath();
-                        ctx.moveTo(0, bottomStreamStartY);
-                        ctx.lineTo(0, 0);
-                        ctx.stroke();
-                    }
-                }
-                ctx.restore();
-            }
-
-            // Glass Frame
-            ctx.lineWidth = lineWidth;
-            ctx.strokeStyle = isPledged ? '#ffffff' : 'rgba(255, 255, 255, 0.35)';
             ctx.beginPath();
-            ctx.moveTo(-w, -h); ctx.lineTo(-waist, 0); ctx.lineTo(-w, h);
-            ctx.moveTo(w, -h);  ctx.lineTo(waist, 0);  ctx.lineTo(w, h);
-            ctx.moveTo(-w - 3.0 * scaleFactor, -h); ctx.lineTo(w + 3.0 * scaleFactor, -h);
-            ctx.moveTo(-w - 3.0 * scaleFactor, h);  ctx.lineTo(w + 3.0 * scaleFactor, h);
-            ctx.stroke();
+            ctx.moveTo(-wIn, -hIn);
+            ctx.lineTo(wIn, -hIn);
+            ctx.lineTo(waistIn, 0);
+            ctx.lineTo(wIn, hIn);
+            ctx.lineTo(-wIn, hIn);
+            ctx.lineTo(-waistIn, 0);
+            ctx.closePath();
+            ctx.clip();
 
-            // Streak Pips
-            if (isPledged) {
-                const streak = stateData.streak;
-                const activeFilled = (streak === 0) ? 0 : ((streak % 4 === 0) ? 4 : (streak % 4));
-                const pipRadius = 4.5 * scaleFactor;
-                const offsetX = w + 25.0 * scaleFactor;
-                const offsetY = h + 1.0 * scaleFactor;
-                const positions = [
-                    { x:  offsetX, y: -offsetY },
-                    { x:  offsetX, y:  offsetY },
-                    { x: -offsetX, y:  offsetY },
-                    { x: -offsetX, y: -offsetY }
-                ];
+            ctx.fillStyle = flameRgb;
+            ctx.strokeStyle = flameRgb;
 
-                for (let i = 0; i < positions.length; i++) {
+            if (state === TimerState.IDLE) {
+                ctx.fillRect(-wIn, 0, wIn * 2, hIn);
+            } else if (state === TimerState.BREAK_FINISHED) {
+                ctx.fillRect(-wIn, -hIn, wIn * 2, hIn);
+            } else if (state === TimerState.STUDY_OVERTIME) {
+                ctx.fillRect(-wIn, 0, wIn * 2, hIn);
+            } else if (!isBreak) {
+                const topSandHeight = Math.sqrt(1.0 - progress) * hIn;
+                if (topSandHeight > 0) {
+                    ctx.fillRect(-wIn, -topSandHeight, wIn * 2, topSandHeight);
+                }
+
+                const baseSandHeight = (1.0 - Math.sqrt(1.0 - progress)) * hIn;
+                const yBed = hIn - baseSandHeight;
+                let topOfSandCenter = yBed;
+
+                if (progress < 0.25) {
+                    const u = progress / 0.25;
+                    const moundHeight = (1.0 - u) * Math.sqrt(u) * 0.4 * hIn;
+                    const moundWidth = wIn * (0.25 + 0.75 * u);
+                    topOfSandCenter = yBed - moundHeight;
+
                     ctx.beginPath();
-                    ctx.arc(positions[i].x, positions[i].y, pipRadius, 0, 2 * Math.PI);
-                    if (i < activeFilled) {
-                        ctx.fillStyle = flameRgb;
-                    } else {
-                        ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
-                    }
+                    ctx.moveTo(-wIn, hIn);
+                    ctx.lineTo(wIn, hIn);
+                    ctx.lineTo(wIn, yBed);
+                    ctx.lineTo(moundWidth, yBed);
+                    ctx.lineTo(0, topOfSandCenter);
+                    ctx.lineTo(-moundWidth, yBed);
+                    ctx.lineTo(-wIn, yBed);
+                    ctx.closePath();
                     ctx.fill();
+                } else if (baseSandHeight > 0) {
+                    ctx.fillRect(-wIn, yBed, wIn * 2, baseSandHeight);
+                }
+
+                if (!isPaused && progress < 1.0) {
+                    ctx.lineWidth = 2.0 * scaleFactor;
+                    ctx.beginPath();
+                    ctx.moveTo(0, 0);
+                    ctx.lineTo(0, Math.min(hIn, topOfSandCenter));
+                    ctx.stroke();
+                }
+            } else {
+                const topSandHeight = Math.sqrt(progress) * hIn;
+                if (topSandHeight > 0) {
+                    ctx.fillRect(-wIn, -topSandHeight, wIn * 2, topSandHeight);
+                }
+
+                const baseSandHeight = (1.0 - Math.sqrt(progress)) * hIn;
+                const yBed = hIn - baseSandHeight;
+                let bottomStreamStartY = yBed;
+
+                const rem = 1.0 - progress;
+                if (rem < 0.25 && rem > 0) {
+                    const u = rem / 0.25;
+                    const moundHeight = (1.0 - u) * Math.sqrt(u) * 0.4 * hIn;
+                    const moundWidth = wIn * (0.25 + 0.75 * u);
+                    const topOfSandCenter = yBed - moundHeight;
+                    bottomStreamStartY = topOfSandCenter;
+
+                    ctx.beginPath();
+                    ctx.moveTo(-wIn, hIn);
+                    ctx.lineTo(wIn, hIn);
+                    ctx.lineTo(wIn, yBed);
+                    ctx.lineTo(moundWidth, yBed);
+                    ctx.lineTo(0, topOfSandCenter);
+                    ctx.lineTo(-moundWidth, yBed);
+                    ctx.lineTo(-wIn, yBed);
+                    ctx.closePath();
+                    ctx.fill();
+                } else if (baseSandHeight > 0) {
+                    ctx.fillRect(-wIn, yBed, wIn * 2, baseSandHeight);
+                }
+
+                if (!isPaused && progress < 1.0 && baseSandHeight > 0) {
+                    ctx.lineWidth = 2.4 * scaleFactor;
+                    ctx.beginPath();
+                    ctx.moveTo(0, bottomStreamStartY);
+                    ctx.lineTo(0, 0);
+                    ctx.stroke();
                 }
             }
-
             ctx.restore();
         }
 
-        function updateLabels() {
-            const isPledged = stateData.isPledged;
-            const state = stateData.state;
+        // Glass Frame
+        ctx.lineWidth = lineWidth;
+        ctx.strokeStyle = isPledged ? '#ffffff' : 'rgba(255, 255, 255, 0.35)';
+        ctx.beginPath();
+        ctx.moveTo(-w, -h); ctx.lineTo(-waist, 0); ctx.lineTo(-w, h);
+        ctx.moveTo(w, -h);  ctx.lineTo(waist, 0);  ctx.lineTo(w, h);
+        ctx.moveTo(-w - 3.0 * scaleFactor, -h); ctx.lineTo(w + 3.0 * scaleFactor, -h);
+        ctx.moveTo(-w - 3.0 * scaleFactor, h);  ctx.lineTo(w + 3.0 * scaleFactor, h);
+        ctx.stroke();
+
+        // Streak Pips
+        if (isPledged) {
             const streak = stateData.streak;
-            const isPaused = stateData.isPaused;
-            const remaining = getRemainingSeconds();
-            const timeStr = formatRemainingTime(remaining);
+            const activeFilled = (streak === 0) ? 0 : ((streak % 4 === 0) ? 4 : (streak % 4));
+            const pipRadius = 4.5 * scaleFactor;
+            const offsetX = w + 25.0 * scaleFactor;
+            const offsetY = h + 1.0 * scaleFactor;
+            const positions = [
+                { x:  offsetX, y: -offsetY },
+                { x:  offsetX, y:  offsetY },
+                { x: -offsetX, y:  offsetY },
+                { x: -offsetX, y: -offsetY }
+            ];
 
-            if (!isPledged) {
-                headerEl.textContent = 'HOURGLASS OF FATE';
-                valueLabelEl.textContent = '';
-                timerLabelEl.textContent = 'Unpledged. Waiting for allegiance vote.';
-                return;
-            }
-
-            const banked = calculateBankedAllegiance(streak);
-            valueLabelEl.textContent = `HOURGLASS VALUE: ${banked.toLocaleString()} ALLEGIANCE`;
-
-            if (state === TimerState.IDLE) {
-                headerEl.textContent = 'THE SANDS OF FATE LAY DORMANT';
-                timerLabelEl.textContent = 'Awaiting battle rekindle or turn-in.';
-            } else if (state === TimerState.LONG_BREAK) {
-                headerEl.textContent = 'REKINDLING THE SANDS...';
-                timerLabelEl.textContent = timeStr;
-            } else if (state === TimerState.SHORT_BREAK) {
-                headerEl.textContent = 'DIVING...';
-                timerLabelEl.textContent = timeStr;
-            } else if (state === TimerState.BREAK_PRIMED) {
-                headerEl.textContent = 'REKINDLING NEAR COMPLETE...';
-                timerLabelEl.textContent = 'Stand by for battle...';
-            } else if (state === TimerState.BREAK_FINISHED) {
-                headerEl.textContent = 'THE SANDS BURN ANEW';
-                timerLabelEl.textContent = 'Study session ready to begin.';
-            } else if (state === TimerState.STUDY) {
-                headerEl.textContent = 'THE HOURGLASS DEMANDS YOUR FOCUS' + (isPaused ? ' BACK' : '');
-                timerLabelEl.textContent = isPaused ? `PAUSED • ${timeStr}` : timeStr;
-            } else if (state === TimerState.STUDY_OVERTIME) {
-                headerEl.textContent = 'THE SANDS HAVE SETTLED';
-                timerLabelEl.textContent = 'Ready to claim reward.';
-            }
-        }
-
-        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwPS6fekiMxguvfqEh9oemWStHT5YWYfF8n7TXgQU_BDrapB-b7S_C_TN7p9-oGm9fFVg/exec';
-
-        async function fetchState() {
-            try {
-                const res = await fetch(`${APPS_SCRIPT_URL}?t=${Date.now()}`);
-                if (res.ok) {
-                    const data = await res.json();
-                    if (data && typeof data.streak !== 'undefined') {
-                        stateData = data;
-                        syncStatusEl.textContent = `Synced: ${new Date().toLocaleTimeString()}`;
-                        syncStatusEl.style.borderColor = 'rgba(46, 194, 126, 0.4)';
-                        syncStatusEl.style.color = '#2ec27e';
-                    }
+            for (let i = 0; i < positions.length; i++) {
+                ctx.beginPath();
+                ctx.arc(positions[i].x, positions[i].y, pipRadius, 0, 2 * Math.PI);
+                if (i < activeFilled) {
+                    ctx.fillStyle = flameRgb;
+                } else {
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
                 }
-            } catch (err) {
-                syncStatusEl.textContent = 'Sync Retry in 30s';
-                syncStatusEl.style.borderColor = 'rgba(224, 27, 36, 0.4)';
-                syncStatusEl.style.color = '#e01b24';
+                ctx.fill();
             }
         }
-        
-        // Fetch immediately on load
-        fetchState();
-        
-        // Poll every 30 seconds
-        setInterval(fetchState, 30000);
-        
-        // Auto-sync immediately whenever you open the tab/phone screen
-        document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'visible') {
-                fetchState();
-            }
-        });
 
-        function renderLoop() {
-            drawHourglass();
-            updateLabels();
-            requestAnimationFrame(renderLoop);
+        ctx.restore();
+    }
+
+    function updateLabels() {
+        const isPledged = stateData.isPledged;
+        const state = stateData.state;
+        const streak = stateData.streak;
+        const isPaused = stateData.isPaused;
+        const remaining = getRemainingSeconds();
+        const timeStr = formatRemainingTime(remaining);
+
+        if (!isPledged) {
+            headerEl.textContent = 'HOURGLASS OF FATE';
+            valueLabelEl.textContent = '';
+            timerLabelEl.textContent = 'Unpledged. Waiting for allegiance vote.';
+            return;
         }
 
-        // Periodic sync poll every 4 seconds
-        fetchState();
-        setInterval(fetchState, 4000);
+        const banked = calculateBankedAllegiance(streak);
+        valueLabelEl.textContent = `HOURGLASS VALUE: ${banked.toLocaleString()} ALLEGIANCE`;
 
-        // Start 60fps render loop
+        if (state === TimerState.IDLE) {
+            headerEl.textContent = 'THE SANDS OF FATE LAY DORMANT';
+            timerLabelEl.textContent = 'Awaiting battle rekindle or turn-in.';
+        } else if (state === TimerState.LONG_BREAK) {
+            headerEl.textContent = 'REKINDLING THE SANDS...';
+            timerLabelEl.textContent = timeStr;
+        } else if (state === TimerState.SHORT_BREAK) {
+            headerEl.textContent = 'DIVING...';
+            timerLabelEl.textContent = timeStr;
+        } else if (state === TimerState.BREAK_PRIMED) {
+            headerEl.textContent = 'REKINDLING NEAR COMPLETE...';
+            timerLabelEl.textContent = 'Stand by for battle...';
+        } else if (state === TimerState.BREAK_FINISHED) {
+            headerEl.textContent = 'THE SANDS BURN ANEW';
+            timerLabelEl.textContent = 'Study session ready to begin.';
+        } else if (state === TimerState.STUDY) {
+            headerEl.textContent = 'THE HOURGLASS DEMANDS YOUR FOCUS' + (isPaused ? ' BACK' : '');
+            timerLabelEl.textContent = isPaused ? `PAUSED • ${timeStr}` : timeStr;
+        } else if (state === TimerState.STUDY_OVERTIME) {
+            headerEl.textContent = 'THE SANDS HAVE SETTLED';
+            timerLabelEl.textContent = 'Ready to claim reward.';
+        }
+    }
+
+    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwPS6fekiMxguvfqEh9oemWStHT5YWYfF8n7TXgQU_BDrapB-b7S_C_TN7p9-oGm9fFVg/exec';
+
+    async function fetchState() {
+        try {
+            const res = await fetch(`${APPS_SCRIPT_URL}?t=${Date.now()}`);
+            if (res.ok) {
+                const data = await res.json();
+                if (data && typeof data.streak !== 'undefined') {
+                    stateData = data;
+                    syncStatusEl.textContent = `Synced: ${new Date().toLocaleTimeString()}`;
+                    syncStatusEl.style.borderColor = 'rgba(46, 194, 126, 0.4)';
+                    syncStatusEl.style.color = '#2ec27e';
+                }
+            }
+        } catch (err) {
+            syncStatusEl.textContent = 'Sync Retry in 30s';
+            syncStatusEl.style.borderColor = 'rgba(224, 27, 36, 0.4)';
+            syncStatusEl.style.color = '#e01b24';
+        }
+    }
+
+    // Polling setup: 30s intervals & visibility wake
+    fetchState();
+    setInterval(fetchState, 30000);
+
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            fetchState();
+        }
+    });
+
+    function renderLoop() {
+        drawHourglass();
+        updateLabels();
         requestAnimationFrame(renderLoop);
-    </script>
+    }
+
+    // Start 60fps render loop
+    requestAnimationFrame(renderLoop);
+</script>
 </body>
 </html>
